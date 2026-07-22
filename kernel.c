@@ -19,25 +19,15 @@ struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4, lo
     register long a7 __asm__("a7") = eid;
 
     __asm__ __volatile__("ecall"
-                         : "=r"(a0), "=r"(a1)
-                         : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(a4), "r"(a5),
-                           "r"(a6), "r"(a7)
-                         : "memory");
+                        : "=r"(a0), "=r"(a1)
+                        : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(a4), "r"(a5),
+                        "r"(a6), "r"(a7)
+                        : "memory");
     return (struct sbiret){.error = a0, .value = a1};
 }
 
 void putchar(char sh) {
     sbi_call(sh, 0, 0, 0, 0, 0 ,0, 1);
-}
-
-void *memset(void *buf, char c, size_t n) {
-    uint8_t *p = (uint8_t *) buf;
-    while (n--)
-
-        *p++ = c;
-
-    return buf;
-    
 }
 
 void kernel_main(void) {
