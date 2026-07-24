@@ -10,12 +10,15 @@ struct sbiret
     do                                                                       \
     {                                                                        \
         printf("PANIC: %s:%d " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
-        while (1){}                                                          \      
+        while (1)                                                            \
+        {                                                                    \
+        }                                                                    \
     } while (0)
 
 #include "common.h"
 
-struct trap_frame {
+struct trap_frame
+{
     uint32_t ra;
     uint32_t gp;
     uint32_t tp;
@@ -49,15 +52,68 @@ struct trap_frame {
     uint32_t sp;
 } __attribute__((packed));
 
-#define READ_CSR(reg)                                                          \
-    ({                                                                         \
-        unsigned long __tmp;                                                   \
-        __asm__ __volatile__("csrr %0, " #reg : "=r"(__tmp));                  \
-        __tmp;                                                                 \
+#define READ_CSR(reg)                                         \
+    ({                                                        \
+        unsigned long __tmp;                                  \
+        __asm__ __volatile__("csrr %0, " #reg : "=r"(__tmp)); \
+        __tmp;                                                \
     })
 
-#define WRITE_CSR(reg, value)                                                  \
-    do {                                                                       \
-        uint32_t __tmp = (value);                                              \
-        __asm__ __volatile__("csrw " #reg ", %0" ::"r"(__tmp));                \
+#define WRITE_CSR(reg, value)                                   \
+    do                                                          \
+    {                                                           \
+        uint32_t __tmp = (value);                               \
+        __asm__ __volatile__("csrw " #reg ", %0" ::"r"(__tmp)); \
     } while (0)
+
+#define PROCS_MAX 8
+
+#define PROC_UNUSED 0
+#define PROC_RUNABLE 1
+
+struct process
+{
+    int pid;
+    int state;
+    vaddr_t sp;
+    uint8_t stack[8192];
+};
+
+struct process procs[PROCS_MAX];
+
+struct process *create_process(uint32_t pc)
+{
+    struct process *proc = NULL;
+    int i;
+    for (i = 0; i < PROCS_MAX; i++)
+    {
+        if (procs[i].state == PROC_UNUSED)
+        {
+            proc = &procs[i];
+            break;
+        }
+    }
+
+    if (!proc)
+        PANIC("no free process slot");
+
+    uint32_t *sp = (uint32_t *)&proc->stack[sizeof(proc->stack)];
+    *--sp = 0;            // s11
+    *--sp = 0;            // s10
+    *--sp = 0;            // s9
+    *--sp = 0;            // s8
+    *--sp = 0;            // s7
+    *--sp = 0;            // s6
+    *--sp = 0;            // s5
+    *--sp = 0;            // s4
+    *--sp = 0;            // s3
+    *--sp = 0;            // s2
+    *--sp = 0;            // s1
+    *--sp = 0;            // s0
+    *--sp = (uint32_t)pc; // ra
+
+    proc->pid = i + 1;
+    proc->state = PROC_RUNABLE;
+    proc->sp = (uint32_t) sp;
+    return proc;
+};
