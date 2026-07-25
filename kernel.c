@@ -169,18 +169,77 @@ __attribute__((naked)) void switch_context(uint32_t *prev_sp,
     );
 }
 
+struct process *current_proc;
+struct process *idle_proc;
+
+void yield(void) {
+    struct process *next = idle_proc;
+
+    for (int i = 0; i < PROCS_MAX; i++){
+        struct process *proc = &procs[(current_proc->pid + i) % PROCS_MAX];
+        if (proc->state == PROC_RUNABLE && proc->pid > 0) {
+            next = proc;
+            break;
+        }
+    }
+
+    if (next == current_proc)
+        return;
+
+    __asm__ __volatile__(
+        "csrw sscratch, %[sscratch] \n"
+        :
+        : [sscratch] "r" ((uint32_t) &next->stack[sizeof(next->stack)])
+    );
+
+    struct process *prev = current_proc;
+    current_proc = next;
+    switch_context(&prev->sp, &next->sp);
+}
+
+void delay(void) {
+    for (int i = 0; i < 30000000; i++)
+        __asm__ __volatile__("nop");
+}
+
+struct process *proc_a;
+struct process *proc_b;
+
+void proc_a_entry(void) {
+    printf ("starting process A \n");
+    while (1)
+    {
+        putchar('A');
+        yield();
+    }
+}
+
+void proc_b_entry(void) {
+    printf("starting process B \n");
+    while (1){
+        putchar('B');
+        yield();
+    }
+}
 
 
 void kernel_main(void) {
     memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
 
-    paddr_t paddr0 = alloc_pages(2);
-    paddr_t paddr1 = alloc_pages(1);
+    printf("\n\n");
 
-    printf("alloc_pages test: paddr0=%x\n", paddr0);
-    printf("alloc_pages test: paddr1=%x\n", paddr1);
+    WRITE_CSR(stvec, (uint32_t) kernel_entry);
 
-    PANIC("booted");
+    idle_proc = create_process((uint32_t) NULL);
+    idle_proc->pid = 0;
+    current_proc = idle_proc;
+
+    proc_a = create_process((uint32_t) proc_a_entry);
+    proc_b = create_process((uint32_t) proc_b_entry);
+
+    yield();
+
+    PANIC("unreachable here!!");
 }
 
 __attribute__((naked))
