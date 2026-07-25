@@ -34,8 +34,11 @@ void putchar(char sh) {
 
 void kernel_entry(void) {
     __asm__ __volatile__(
-        "csrw sscratch, sp\n"
-        "addi sp, sp, -4 * 31\n" // Allocate space for the trap_frame struct
+        // Retrieve the kernel stack of the running process from sscratch.
+        "csrrw sp, sscratch, sp\n"
+        "addi sp, sp, -4 * 31\n"
+        
+        
         "sw ra,  4 * 0(sp)\n"
         "sw gp,  4 * 1(sp)\n"
         "sw tp,  4 * 2(sp)\n"
@@ -67,8 +70,13 @@ void kernel_entry(void) {
         "sw s10, 4 * 28(sp)\n"
         "sw s11, 4 * 29(sp)\n"
 
+        // Retrieve and save the sp at the time of exception.
         "csrr a0, sscratch\n"
         "sw a0, 4 * 30(sp)\n"
+        
+        // Reset the kernel stack.
+        "addi a0, sp, 4 * 31\n"
+        "csrw sscratch, a0\n"
 
         "mv a0, sp\n"
         "call handle_trap\n"
@@ -109,9 +117,9 @@ void kernel_entry(void) {
 }
 
 void handle_trap(struct trap_frame *f) {
-    uint32_t scause = READ_CSR(scause);
-    uint32_t stval = READ_CSR(stval);
-    uint32_t user_pc = READ_CSR(sepc);
+    uint32_t scause = READ_CSR(scause); // Why error
+    uint32_t stval = READ_CSR(stval); // What make eror
+    uint32_t user_pc = READ_CSR(sepc); // Where error
 
     PANIC("unexpected trap scause=%x, stval=%x, sepc=%x\n", scause, stval, user_pc);
 } 
