@@ -1,5 +1,12 @@
 #pragma once
 
+#define SATP_SV32 (1u << 31) // enable paging in Sv32 mode
+#define PAGE_V (1 << 0) //valid, existing or not
+#define PAGE_R (1 << 1) //readable
+#define PAGE_W (1 << 2) //writable
+#define PAGE_X (1 << 3) //Excutable
+#define PAGE_U (1 << 4) //User (accessible in user mode)
+
 struct sbiret
 {
     long error;
@@ -114,6 +121,6 @@ struct process *create_process(uint32_t pc)
 
     proc->pid = i + 1;
     proc->state = PROC_RUNABLE;
-    proc->sp = (uint32_t) sp;
+    proc->sp = (uint32_t)sp;
     return proc;
 };

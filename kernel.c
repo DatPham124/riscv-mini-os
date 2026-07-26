@@ -1,7 +1,6 @@
 #include "kernel.h"
 #include "common.h"
 
-
 typedef unsigned char uint8_t;
 typedef unsigned int uint32_t;
 typedef uint32_t size_t;
@@ -10,7 +9,8 @@ extern char __free_ram[], __free_ram_end[];
 
 extern char __bss[], __bss_end[], __stack_top[];
 
-struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long fid, long eid){
+struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long fid, long eid)
+{
     register long a0 __asm__("a0") = arg0;
     register long a1 __asm__("a1") = arg1;
     register long a2 __asm__("a2") = arg2;
@@ -21,24 +21,25 @@ struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4, lo
     register long a7 __asm__("a7") = eid;
 
     __asm__ __volatile__("ecall"
-                        : "=r"(a0), "=r"(a1)
-                        : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(a4), "r"(a5),
-                        "r"(a6), "r"(a7)
-                        : "memory");
+                         : "=r"(a0), "=r"(a1)
+                         : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(a4), "r"(a5),
+                           "r"(a6), "r"(a7)
+                         : "memory");
     return (struct sbiret){.error = a0, .value = a1};
 }
 
-void putchar(char sh) {
-    sbi_call(sh, 0, 0, 0, 0, 0 ,0, 1);
+void putchar(char sh)
+{
+    sbi_call(sh, 0, 0, 0, 0, 0, 0, 1);
 }
 
-void kernel_entry(void) {
+void kernel_entry(void)
+{
     __asm__ __volatile__(
         // Retrieve the kernel stack of the running process from sscratch.
         "csrrw sp, sscratch, sp\n"
         "addi sp, sp, -4 * 31\n"
-        
-        
+
         "sw ra,  4 * 0(sp)\n"
         "sw gp,  4 * 1(sp)\n"
         "sw tp,  4 * 2(sp)\n"
@@ -73,7 +74,7 @@ void kernel_entry(void) {
         // Retrieve and save the sp at the time of exception.
         "csrr a0, sscratch\n"
         "sw a0, 4 * 30(sp)\n"
-        
+
         // Reset the kernel stack.
         "addi a0, sp, 4 * 31\n"
         "csrw sscratch, a0\n"
@@ -112,36 +113,38 @@ void kernel_entry(void) {
         "lw s10, 4 * 28(sp)\n"
         "lw s11, 4 * 29(sp)\n"
         "lw sp,  4 * 30(sp)\n"
-        "sret\n"
-    );
+        "sret\n");
 }
 
-void handle_trap(struct trap_frame *f) {
+void handle_trap(struct trap_frame *f)
+{
     uint32_t scause = READ_CSR(scause); // Why error
-    uint32_t stval = READ_CSR(stval); // What make eror
-    uint32_t user_pc = READ_CSR(sepc); // Where error
+    uint32_t stval = READ_CSR(stval);   // What make eror
+    uint32_t user_pc = READ_CSR(sepc);  // Where error
 
     PANIC("unexpected trap scause=%x, stval=%x, sepc=%x\n", scause, stval, user_pc);
-} 
+}
 
-paddr_t alloc_pages(uint32_t n) {
-    static paddr_t next_paddr = (paddr_t) __free_ram;
+paddr_t alloc_pages(uint32_t n)
+{
+    static paddr_t next_paddr = (paddr_t)__free_ram;
     paddr_t paddr = next_paddr;
     next_paddr += n * PAGE_SIZE;
 
-    if (next_paddr > (paddr_t) __free_ram_end)
+    if (next_paddr > (paddr_t)__free_ram_end)
         PANIC("out of memory");
 
-    memset((void *) paddr, 0, n * PAGE_SIZE);
+    memset((void *)paddr, 0, n * PAGE_SIZE);
     return paddr;
 }
 
 __attribute__((naked)) void switch_context(uint32_t *prev_sp,
-                                           uint32_t *next_sp) {
+                                           uint32_t *next_sp)
+{
     __asm__ __volatile__(
-        
-        "addi sp, sp, -13 * 4\n" 
-        "sw ra,  0  * 4(sp)\n"  
+
+        "addi sp, sp, -13 * 4\n"
+        "sw ra,  0  * 4(sp)\n"
         "sw s0,  1  * 4(sp)\n"
         "sw s1,  2  * 4(sp)\n"
         "sw s2,  3  * 4(sp)\n"
@@ -155,11 +158,10 @@ __attribute__((naked)) void switch_context(uint32_t *prev_sp,
         "sw s10, 11 * 4(sp)\n"
         "sw s11, 12 * 4(sp)\n"
 
-        
-        "sw sp, (a0)\n"        
-        "lw sp, (a1)\n"         
+        "sw sp, (a0)\n"
+        "lw sp, (a1)\n"
 
-        "lw ra,  0  * 4(sp)\n"  
+        "lw ra,  0  * 4(sp)\n"
         "lw s0,  1  * 4(sp)\n"
         "lw s1,  2  * 4(sp)\n"
         "lw s2,  3  * 4(sp)\n"
@@ -172,20 +174,22 @@ __attribute__((naked)) void switch_context(uint32_t *prev_sp,
         "lw s9,  10 * 4(sp)\n"
         "lw s10, 11 * 4(sp)\n"
         "lw s11, 12 * 4(sp)\n"
-        "addi sp, sp, 13 * 4\n"  
-        "ret\n"
-    );
+        "addi sp, sp, 13 * 4\n"
+        "ret\n");
 }
 
 struct process *current_proc;
 struct process *idle_proc;
 
-void yield(void) {
+void yield(void)
+{
     struct process *next = idle_proc;
 
-    for (int i = 0; i < PROCS_MAX; i++){
+    for (int i = 0; i < PROCS_MAX; i++)
+    {
         struct process *proc = &procs[(current_proc->pid + i) % PROCS_MAX];
-        if (proc->state == PROC_RUNABLE && proc->pid > 0) {
+        if (proc->state == PROC_RUNABLE && proc->pid > 0)
+        {
             next = proc;
             break;
         }
@@ -197,15 +201,15 @@ void yield(void) {
     __asm__ __volatile__(
         "csrw sscratch, %[sscratch] \n"
         :
-        : [sscratch] "r" ((uint32_t) &next->stack[sizeof(next->stack)])
-    );
+        : [sscratch] "r"((uint32_t)&next->stack[sizeof(next->stack)]));
 
     struct process *prev = current_proc;
     current_proc = next;
     switch_context(&prev->sp, &next->sp);
 }
 
-void delay(void) {
+void delay(void)
+{
     for (int i = 0; i < 30000000; i++)
         __asm__ __volatile__("nop");
 }
@@ -213,8 +217,9 @@ void delay(void) {
 struct process *proc_a;
 struct process *proc_b;
 
-void proc_a_entry(void) {
-    printf ("starting process A \n");
+void proc_a_entry(void)
+{
+    printf("starting process A \n");
     while (1)
     {
         putchar('A');
@@ -222,28 +227,52 @@ void proc_a_entry(void) {
     }
 }
 
-void proc_b_entry(void) {
+void proc_b_entry(void)
+{
     printf("starting process B \n");
-    while (1){
+    while (1)
+    {
         putchar('B');
         yield();
     }
 }
 
+void map_page(uint32_t *table1, uint32_t vaddr, paddr_t paddr, uint32_t flags)
+{
+    if (!is_aligned(vaddr, PAGE_SIZE))
+        PANIC("unaligned vaddr %x", vaddr);
 
-void kernel_main(void) {
-    memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
+    if (!is_aligned(paddr, PAGE_SIZE))
+        PANIC("unaligned paddr %x", paddr);
+
+    uint32_t vpn1 = (vaddr >> 22) & 0x3ff;
+    
+    if ((table1[vpn1] & PAGE_V) == 0)
+    {
+        // create the 1st level page table if it doesn't exist
+        uint32_t pt_paddr = alloc_pages(1);
+        table1[vpn1] = ((pt_paddr / PAGE_SIZE) << 10) | PAGE_V;
+    }
+
+    uint32_t vpn0 = (vaddr >> 12) & 0x3ff;
+    uint32_t *table0 = (uint32_t *)((table1[vpn1] >> 10) * PAGE_SIZE);
+    table0[vpn0] = ((paddr / PAGE_SIZE) << 10) | flags | PAGE_V;
+}
+
+void kernel_main(void)
+{
+    memset(__bss, 0, (size_t)__bss_end - (size_t)__bss);
 
     printf("\n\n");
 
-    WRITE_CSR(stvec, (uint32_t) kernel_entry);
+    WRITE_CSR(stvec, (uint32_t)kernel_entry);
 
-    idle_proc = create_process((uint32_t) NULL);
+    idle_proc = create_process((uint32_t)NULL);
     idle_proc->pid = 0;
     current_proc = idle_proc;
 
-    proc_a = create_process((uint32_t) proc_a_entry);
-    proc_b = create_process((uint32_t) proc_b_entry);
+    proc_a = create_process((uint32_t)proc_a_entry);
+    proc_b = create_process((uint32_t)proc_b_entry);
 
     yield();
 
@@ -256,11 +285,12 @@ __attribute__((aligned(4)))
 __attribute__((section(".text.boot")))
 __attribute__((naked))
 
-void boot(void) {
+void
+boot(void)
+{
     __asm__ __volatile__(
         "mv sp, %[stack_top]\n"
         "j kernel_main\n"
         :
-        : [stack_top] "r" (__stack_top)
-    );
+        : [stack_top] "r"(__stack_top));
 }
