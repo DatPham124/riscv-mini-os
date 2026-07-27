@@ -5,7 +5,7 @@ typedef unsigned char uint8_t;
 typedef unsigned int uint32_t;
 typedef uint32_t size_t;
 
-extern char __free_ram[], __free_ram_end[];
+extern char __free_ram[], __free_ram_end[], __kernel_base[];
 
 extern char __bss[], __bss_end[], __stack_top[];
 
@@ -245,16 +245,35 @@ void map_page(uint32_t *table1, uint32_t vaddr, paddr_t paddr, uint32_t flags)
     if (!is_aligned(paddr, PAGE_SIZE))
         PANIC("unaligned paddr %x", paddr);
 
-    uint32_t vpn1 = (vaddr >> 22) & 0x3ff;
-    
+    // Trích xuất 10 bit của vpn1 (Chỉ mục bảng phân trang caaos 1)
+    // Dịch phải 22 bit để vứt bỏ phần Offset(12) và vpn0(10)
+    // Dùng mask 0x3ff (10 bit 1) để cắt gọn gàng, bỏ phần bit dư thừa để lấy ra sạch sẽ phần vpn1
+
+    uint32_t vpn1 = (vaddr >> 22) & 0x3ff; //
+
     if ((table1[vpn1] & PAGE_V) == 0)
     {
+
+        /* Cấu trúc Virtual Address (Sv32):
+         * +-------------+-------------+--------------+
+         * | VPN1 (10b)  | VPN0 (10b)  | Offset (12b) |
+         * +-------------+-------------+--------------+
+         * 31          22 21         12 11            0
+         */
+
         // create the 1st level page table if it doesn't exist
         uint32_t pt_paddr = alloc_pages(1);
+
+        // Phép chia để biết được địa chỉ của khối (VD: 4096 / 4096, 8192 / 4096)
+        // Dịch trái 10 bit đề dành cho các cờ
+
         table1[vpn1] = ((pt_paddr / PAGE_SIZE) << 10) | PAGE_V;
     }
 
     uint32_t vpn0 = (vaddr >> 12) & 0x3ff;
+
+    //Bỏ đi phần cờ 10 bit phía sau để tính toán địa chỉ câp kế tiếp cho bảng
+
     uint32_t *table0 = (uint32_t *)((table1[vpn1] >> 10) * PAGE_SIZE);
     table0[vpn0] = ((paddr / PAGE_SIZE) << 10) | flags | PAGE_V;
 }

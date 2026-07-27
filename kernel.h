@@ -83,6 +83,7 @@ struct process
     int pid;
     int state;
     vaddr_t sp;
+    uint32_t *page_table;
     uint8_t stack[8192];
 };
 
@@ -119,8 +120,14 @@ struct process *create_process(uint32_t pc)
     *--sp = 0;            // s0
     *--sp = (uint32_t)pc; // ra
 
+    uint32_t *page_table = (uint32_t *) alloc_pages(1);
+    for (paddr_t paddr = (paddr_t) __kernel_base;
+        paddr < (paddr_t) __free_ram_end; paddr += PAGE_SIZE)
+        map_page(page_table, paddr, paddr, PAGE_R | PAGE_W | PAGE_X);
+
     proc->pid = i + 1;
     proc->state = PROC_RUNABLE;
     proc->sp = (uint32_t)sp;
+    proc->page_table = page_table;
     return proc;
 };
