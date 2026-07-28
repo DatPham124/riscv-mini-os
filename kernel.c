@@ -198,13 +198,21 @@ void yield(void)
     if (next == current_proc)
         return;
 
-    __asm__ __volatile__(
-        "csrw sscratch, %[sscratch] \n"
-        :
-        : [sscratch] "r"((uint32_t)&next->stack[sizeof(next->stack)]));
-
     struct process *prev = current_proc;
     current_proc = next;
+
+    __asm__ __volatile__(
+        // Bắt CPU xóa bộ nhớ đệm (TLB)
+        "sfence.vma\n"
+        // Ghi gia trị vào thanh ghi quản lý phân trang
+        "csrw satp, %[satp] \n"
+        "sfence.vma\n"
+        "csrw sscratch, %[sscratch]\n"
+        :
+
+        : [satp] "r"(SATP_SV32 | ((uint32_t)next->page_table / PAGE_SIZE)),
+          [sscratch] "r"((uint32_t)&next->stack[sizeof(next->stack)]));
+
     switch_context(&prev->sp, &next->sp);
 }
 
@@ -223,6 +231,7 @@ void proc_a_entry(void)
     while (1)
     {
         putchar('A');
+        delay();
         yield();
     }
 }
@@ -233,6 +242,7 @@ void proc_b_entry(void)
     while (1)
     {
         putchar('B');
+        delay();
         yield();
     }
 }
@@ -272,7 +282,7 @@ void map_page(uint32_t *table1, uint32_t vaddr, paddr_t paddr, uint32_t flags)
 
     uint32_t vpn0 = (vaddr >> 12) & 0x3ff;
 
-    //Bỏ đi phần cờ 10 bit phía sau để tính toán địa chỉ câp kế tiếp cho bảng
+    // Bỏ đi phần cờ 10 bit phía sau để tính toán địa chỉ câp kế tiếp cho bảng
 
     uint32_t *table0 = (uint32_t *)((table1[vpn1] >> 10) * PAGE_SIZE);
     table0[vpn0] = ((paddr / PAGE_SIZE) << 10) | flags | PAGE_V;

@@ -1,11 +1,19 @@
 #pragma once
 
+#include "common.h"
+
 #define SATP_SV32 (1u << 31) // enable paging in Sv32 mode
-#define PAGE_V (1 << 0) //valid, existing or not
-#define PAGE_R (1 << 1) //readable
-#define PAGE_W (1 << 2) //writable
-#define PAGE_X (1 << 3) //Excutable
-#define PAGE_U (1 << 4) //User (accessible in user mode)
+#define PAGE_V (1 << 0)      // valid, existing or not
+#define PAGE_R (1 << 1)      // readable
+#define PAGE_W (1 << 2)      // writable
+#define PAGE_X (1 << 3)      // Excutable
+#define PAGE_U (1 << 4)      // User (accessible in user mode)
+
+extern char __kernel_base[], __free_ram_end[];
+extern char __free_ram[];
+
+paddr_t alloc_pages(uint32_t n);
+void map_page(uint32_t *table1, uint32_t vaddr, paddr_t paddr, uint32_t flags);
 
 struct sbiret
 {
@@ -21,8 +29,6 @@ struct sbiret
         {                                                                    \
         }                                                                    \
     } while (0)
-
-#include "common.h"
 
 struct trap_frame
 {
@@ -120,9 +126,9 @@ struct process *create_process(uint32_t pc)
     *--sp = 0;            // s0
     *--sp = (uint32_t)pc; // ra
 
-    uint32_t *page_table = (uint32_t *) alloc_pages(1);
-    for (paddr_t paddr = (paddr_t) __kernel_base;
-        paddr < (paddr_t) __free_ram_end; paddr += PAGE_SIZE)
+    uint32_t *page_table = (uint32_t *)alloc_pages(1);
+    for (paddr_t paddr = (paddr_t)__kernel_base;
+         paddr < (paddr_t)__free_ram_end; paddr += PAGE_SIZE)
         map_page(page_table, paddr, paddr, PAGE_R | PAGE_W | PAGE_X);
 
     proc->pid = i + 1;
