@@ -9,6 +9,8 @@
 #define PAGE_X (1 << 3)      // Excutable
 #define PAGE_U (1 << 4)      // User (accessible in user mode)
 
+#define USER_BASE 0x1000000
+
 extern char __kernel_base[], __free_ram_end[];
 extern char __free_ram[];
 
@@ -95,7 +97,7 @@ struct process
 
 struct process procs[PROCS_MAX];
 
-struct process *create_process(uint32_t pc)
+struct process *create_process(const void *image, size_t image_size)
 {
     struct process *proc = NULL;
     int i;
@@ -112,24 +114,38 @@ struct process *create_process(uint32_t pc)
         PANIC("no free process slot");
 
     uint32_t *sp = (uint32_t *)&proc->stack[sizeof(proc->stack)];
-    *--sp = 0;            // s11
-    *--sp = 0;            // s10
-    *--sp = 0;            // s9
-    *--sp = 0;            // s8
-    *--sp = 0;            // s7
-    *--sp = 0;            // s6
-    *--sp = 0;            // s5
-    *--sp = 0;            // s4
-    *--sp = 0;            // s3
-    *--sp = 0;            // s2
-    *--sp = 0;            // s1
-    *--sp = 0;            // s0
-    *--sp = (uint32_t)pc; // ra
+    *--sp = 0;                    // s11
+    *--sp = 0;                    // s10
+    *--sp = 0;                    // s9
+    *--sp = 0;                    // s8
+    *--sp = 0;                    // s7
+    *--sp = 0;                    // s6
+    *--sp = 0;                    // s5
+    *--sp = 0;                    // s4
+    *--sp = 0;                    // s3
+    *--sp = 0;                    // s2
+    *--sp = 0;                    // s1
+    *--sp = 0;                    // s0
+    *--sp = (uint32_t)user_entry; // ra
 
     uint32_t *page_table = (uint32_t *)alloc_pages(1);
+
+    // Map kernel pages
     for (paddr_t paddr = (paddr_t)__kernel_base;
          paddr < (paddr_t)__free_ram_end; paddr += PAGE_SIZE)
         map_page(page_table, paddr, paddr, PAGE_R | PAGE_W | PAGE_X);
+
+    // Map user pages
+    for (uint32_t off = 0; off < image_size; off += PAGE_SIZE)
+    {
+        paddr_t page = alloc_pages(1);
+
+        size_t remaining = image_size - off;
+        size_t copy_size = PAGE_SIZE <= remaining ? PAGE_SIZE : remaining;
+
+        memcpy((void *)page, image + off, copy_size);
+        map_page(page_table, USER_BASE + off, page, PAGE_U | PAGE_R | PAGE_W | PAGE_X);
+    }
 
     proc->pid = i + 1;
     proc->state = PROC_RUNABLE;
