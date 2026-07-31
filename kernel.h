@@ -11,6 +11,20 @@
 
 #define USER_BASE 0x1000000
 
+#define SSTATUS_SPIE (1 << 5)
+
+
+__attribute__((naked)) void user_entry(void) {
+    __asm__ __volatile__(
+        "csrw sepc, %[sepc]        \n"
+        "csrw sstatus, %[sstatus]  \n"
+        "sret                      \n"
+        :
+        : [sepc] "r" (USER_BASE),
+        [sstatus] "r" (SSTATUS_SPIE)
+    );
+}
+
 extern char __kernel_base[], __free_ram_end[];
 extern char __free_ram[];
 
@@ -132,7 +146,7 @@ struct process *create_process(const void *image, size_t image_size)
 
     // Map kernel pages
     for (paddr_t paddr = (paddr_t)__kernel_base;
-         paddr < (paddr_t)__free_ram_end; paddr += PAGE_SIZE)
+        paddr < (paddr_t)__free_ram_end; paddr += PAGE_SIZE)
         map_page(page_table, paddr, paddr, PAGE_R | PAGE_W | PAGE_X);
 
     // Map user pages

@@ -9,6 +9,8 @@ extern char __free_ram[], __free_ram_end[], __kernel_base[];
 
 extern char __bss[], __bss_end[], __stack_top[];
 
+extern char _binary_shell_bin_start[], _binary_shell_bin_size[];
+
 struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long fid, long eid)
 {
     register long a0 __asm__("a0") = arg0;
@@ -296,16 +298,15 @@ void kernel_main(void)
 
     WRITE_CSR(stvec, (uint32_t)kernel_entry);
 
-    idle_proc = create_process((uint32_t)NULL);
+    idle_proc = create_process(NULL, 0);
     idle_proc->pid = 0;
     current_proc = idle_proc;
 
-    proc_a = create_process((uint32_t)proc_a_entry);
-    proc_b = create_process((uint32_t)proc_b_entry);
+    create_process(_binary_shell_bin_start, (size_t) _binary_shell_bin_size);
 
     yield();
 
-    PANIC("unreachable here!!");
+    PANIC("switched to idle process");
 }
 
 __attribute__((naked))
