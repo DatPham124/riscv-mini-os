@@ -12,3 +12,6 @@ $OBJCOPY -Ibinary -Oelf32-littleriscv shell.bin shell.bin.o
 # Build the kernel
 $CC $CFLAGS -Wl,-Tkernel.ld -Wl,-Map=kernel.map -o kernel.elf \
     kernel.c common.c shell.bin.o
+
+# Start QEMU
+qemu-system-riscv32 -machine virt -bios default -nographic -serial mon:stdio --no-reboot -kernel kernel.elf
