@@ -180,6 +180,17 @@ __attribute__((naked)) void switch_context(uint32_t *prev_sp,
         "ret\n");
 }
 
+__attribute__((naked)) void user_entry(void) {
+    __asm__ __volatile__(
+        "csrw sepc, %[sepc]        \n"
+        "csrw sstatus, %[sstatus]  \n"
+        "sret                      \n"
+        :
+        : [sepc] "r" (USER_BASE),
+        [sstatus] "r" (SSTATUS_SPIE)
+    );
+}
+
 struct process *current_proc;
 struct process *idle_proc;
 
@@ -325,7 +336,7 @@ struct process *create_process(const void *image, size_t image_size)
 
     // Map kernel pages
     for (paddr_t paddr = (paddr_t)__kernel_base;
-        paddr < (paddr_t)__free_ram_end; paddr += PAGE_SIZE)
+         paddr < (paddr_t)__free_ram_end; paddr += PAGE_SIZE)
         map_page(page_table, paddr, paddr, PAGE_R | PAGE_W | PAGE_X);
 
     // Map user pages
@@ -359,7 +370,7 @@ void kernel_main(void)
     idle_proc->pid = 0;
     current_proc = idle_proc;
 
-    create_process(_binary_shell_bin_start, (size_t) _binary_shell_bin_size);
+    create_process(_binary_shell_bin_start, (size_t)_binary_shell_bin_size);
 
     yield();
 

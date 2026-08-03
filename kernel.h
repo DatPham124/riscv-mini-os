@@ -9,21 +9,11 @@
 #define PAGE_X (1 << 3)      // Excutable
 #define PAGE_U (1 << 4)      // User (accessible in user mode)
 
+#define SSTATUS_SPIE (1 << 5)
+
 #define USER_BASE 0x1000000
 
 #define SSTATUS_SPIE (1 << 5)
-
-
-__attribute__((naked)) void user_entry(void) {
-    __asm__ __volatile__(
-        "csrw sepc, %[sepc]        \n"
-        "csrw sstatus, %[sstatus]  \n"
-        "sret                      \n"
-        :
-        : [sepc] "r" (USER_BASE),
-        [sstatus] "r" (SSTATUS_SPIE)
-    );
-}
 
 extern char __kernel_base[], __free_ram_end[];
 extern char __free_ram[];
