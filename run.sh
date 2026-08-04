@@ -1,4 +1,7 @@
 #!/bin/bash
+
+set -e
+
 CC=clang
 CFLAGS="-std=c11 -O2 -g3 -Wall -Wextra --target=riscv32 -ffreestanding -nostdlib"
 
