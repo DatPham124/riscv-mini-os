@@ -15,7 +15,7 @@
 
 #define SSTATUS_SPIE (1 << 5)
 
-#define SCAUSE_ECAL 8
+#define SCAUSE_ECALL 8
 
 extern char __kernel_base[], __free_ram_end[];
 extern char __free_ram[];

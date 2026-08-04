@@ -8,10 +8,6 @@ __attribute__((noreturn)) void exit(void)
         ;
 }
 
-void putchar(char ch)
-{
-}
-
 __attribute__((section(".text.start")))
 __attribute__((naked))
 
@@ -34,7 +30,7 @@ int syscall(int sysno, int arg0, int arg1, int arg2)
     register int a2 __asm__("a2") = arg2;
     // Thanh ghi a3 chứa Syscall Number để báo cho Kernel biết cần làm gì.
     // (VD: 1 -> Yêu cầu in chữ, 2 -> Yêu cầu đọc phím)
-    register int a3 __asm__("a0") = sysno;
+    register int a3 __asm__("a3") = sysno;
 
     __asm__ __volatile__("ecall"
                          : "=r"(a0)
@@ -44,6 +40,6 @@ int syscall(int sysno, int arg0, int arg1, int arg2)
     return a0;
 }
 
-void putchar(char ch){
+void putchar(char ch) {
     syscall(SYS_PUTCHAR, ch, 0, 0);
 }
