@@ -118,15 +118,19 @@ void kernel_entry(void)
         "sret\n");
 }
 
-void handle_trap(struct trap_frame *f)
-{
-    uint32_t scause = READ_CSR(scause); // Why error
-    uint32_t stval = READ_CSR(stval);   // What make eror
-    uint32_t user_pc = READ_CSR(sepc);  // Where error
+void handle_trap(struct trap_frame *f) {
+    uint32_t scause = READ_CSR(scause);
+    uint32_t stval = READ_CSR(stval);
+    uint32_t user_pc = READ_CSR(sepc);
+    if (scause == SCAUSE_ECALL) {
+        handle_syscall(f);
+        user_pc += 4;
+    } else {
+        PANIC("unexpected trap scause=%x, stval=%x, sepc=%x\n", scause, stval, user_pc);
+    }
 
-    PANIC("unexpected trap scause=%x, stval=%x, sepc=%x\n", scause, stval, user_pc);
+    WRITE_CSR(sepc, user_pc);
 }
-
 paddr_t alloc_pages(uint32_t n)
 {
     static paddr_t next_paddr = (paddr_t)__free_ram;
@@ -180,15 +184,15 @@ __attribute__((naked)) void switch_context(uint32_t *prev_sp,
         "ret\n");
 }
 
-__attribute__((naked)) void user_entry(void) {
+__attribute__((naked)) void user_entry(void)
+{
     __asm__ __volatile__(
         "csrw sepc, %[sepc]        \n"
         "csrw sstatus, %[sstatus]  \n"
         "sret                      \n"
         :
-        : [sepc] "r" (USER_BASE),
-        [sstatus] "r" (SSTATUS_SPIE)
-    );
+        : [sepc] "r"(USER_BASE),
+          [sstatus] "r"(SSTATUS_SPIE));
 }
 
 struct process *current_proc;

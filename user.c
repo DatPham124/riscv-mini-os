@@ -28,6 +28,7 @@ start(void)
 int syscall(int sysno, int arg0, int arg1, int arg2)
 {
     // Các thanh ghi tham số phụ thêm cho a3, như là muốn in gì, nhập gì.
+    // return kernel sẽ được set ở a0
     register int a0 __asm__("a0") = arg0;
     register int a1 __asm__("a1") = arg1;
     register int a2 __asm__("a2") = arg2;
@@ -41,4 +42,8 @@ int syscall(int sysno, int arg0, int arg1, int arg2)
                          : "memory");
 
     return a0;
+}
+
+void putchar(char ch){
+    syscall(SYS_PUTCHAR, ch, 0, 0);
 }
