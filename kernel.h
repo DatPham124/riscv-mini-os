@@ -17,6 +17,8 @@
 
 #define SCAUSE_ECALL 8
 
+#define PROC_EXITED 2
+
 extern char __kernel_base[], __free_ram_end[];
 extern char __free_ram[];
 

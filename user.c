@@ -2,12 +2,6 @@
 
 extern char __stack_top[];
 
-__attribute__((noreturn)) void exit(void)
-{
-    for (;;)
-        ;
-}
-
 __attribute__((section(".text.start")))
 __attribute__((naked))
 
@@ -48,3 +42,7 @@ int getchar(void) {
     return syscall(SYS_GETCHAR, 0, 0, 0);
 }
 
+__attribute__((noreturn)) void exit(void) {
+    syscall(SYS_EXIT, 0, 0, 0);
+    for (;;);
+}
