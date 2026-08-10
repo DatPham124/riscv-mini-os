@@ -401,6 +401,26 @@ void handle_trap(struct trap_frame *f)
 
     WRITE_CSR(sepc, user_pc);
 }
+// Các hàm sau dùng để thao tác với các thanh ghi phần cứng Virtio thông qua cơ chế MMIO (Memory - Mapped I/O)
+
+// ĐỌc 1 số 32 bit hoặc 64 bit từ một thanh ghi của thiết bị Virtio
+uint32_t virtio_reg_read32(unsigned offset) {
+    return *((volatile uint32_t *) (VIRTIO_BLK_PADDR + offset));
+}
+
+uint64_t virtio_reg_read64(unsigned offset) {
+    return *((volatile uint64_t *) (VIRTIO_BLK_PADDR + offset));
+}
+
+// Ch
+
+void virtio_reg_write32(unsigned offset, uint32_t value) {
+    *((volatile uint32_t *) (VIRTIO_BLK_PADDR + offset)) = value;
+}
+
+void virtio_reg_fetch_and_or32(unsigned offset, uint32_t value) {
+    virtio_reg_write32(offset, virtio_reg_read32(offset) | value);
+}
 
 void kernel_main(void)
 {
