@@ -330,6 +330,8 @@ struct process *create_process(const void *image, size_t image_size)
     for (paddr_t paddr = (paddr_t)__kernel_base;
          paddr < (paddr_t)__free_ram_end; paddr += PAGE_SIZE)
         map_page(page_table, paddr, paddr, PAGE_R | PAGE_W | PAGE_X);
+    
+    map_page(page_table, VIRTIO_BLK_PADDR, VIRTIO_BLK_PADDR, PAGE_R | PAGE_W);
 
     // Map user pages
     for (uint32_t off = 0; off < image_size; off += PAGE_SIZE)
