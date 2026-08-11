@@ -11,6 +11,11 @@ extern char __bss[], __bss_end[], __stack_top[];
 
 extern char _binary_shell_bin_start[], _binary_shell_bin_size[];
 
+struct virtio_virtq *blk_request_vq;
+struct virtio_blk_req *blk_req;
+paddr_t blk_req_paddr;
+uint64_t blk_capacity;
+
 struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long fid, long eid)
 {
     register long a0 __asm__("a0") = arg0;
