@@ -16,6 +16,35 @@ struct virtio_blk_req *blk_req;
 paddr_t blk_req_paddr;
 uint64_t blk_capacity;
 
+void virtio_blk_init(void) {
+    if (virtio_reg_read32(VIRTIO_REG_MAGIC) != 0x74726976)
+        PANIC("virtio: invalid magic value");
+    if (virtio_reg_read32(VIRTIO_REG_VERSION) != 1)
+        PANIC("virtio: invalid version")
+    if (virtio_reg_read32(VIRTIO_REG_DEVICE_ID) != VIRTIO_DEVICE_BLK)
+        PANIC("virtio: invalid device id")
+
+    // 1. Reset the device    
+    virtio_reg_write32(VIRTIO_REG_DEVICE_STATUS, 0)
+    // 2. Set the ACKNOWLEDGE status bit: We found the device
+    virtio_reg_fetch_and_or32(VIRTIO_REG_DEVICE_STATUS, VIRTIO_STATUS_ACK);
+    // 3. Set the DRIVER status bit: We know how to use the device
+    virtio_reg_fetch_and_or32(VIRTIO_REG_DEVICE_STATUS, VIRTIO_STATUS_DRIVER);
+    // Set our page size: We use 4KB pages. This defines PFN (page frame number) calculation.
+    virtio_reg_write32(VIRTIO_REG_PAGE_SIZE, PAGE_SIZE);
+    // Initialize a queue for disk read/write requests..
+    blk_request_vq = virtq_init(0);
+    // 6. Set the DRIVER_OK status bit: We can use now the device!
+    virtio_reg_write32(VIRTIO_REG_DEVICE_STATUS, VIRTIO_STATUS_DRIVER_OK);
+
+    // Get the disk capacity
+    blk_capacity = virtio_reg_read64(VIRTIO_REG_DEVICE_CONFIG + 0) * SECTOR_SIZE;
+    printf("virtio-blk: capacity is %d bytes\n", (int)blk_capacity);
+
+    blk_req_paddr = alloc_pages(align_up(sizeof(*blk_reg), PAGE_SIZE) / PAGE_SIZE);
+    blk_req = (struct virtio_blk_req *) blk_req_paddr;
+}
+
 struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long fid, long eid)
 {
     register long a0 __asm__("a0") = arg0;
@@ -436,6 +465,8 @@ void kernel_main(void)
     printf("\n\n");
 
     WRITE_CSR(stvec, (uint32_t)kernel_entry);
+
+    virtio_blk_init();
 
     idle_proc = create_process(NULL, 0);
     idle_proc->pid = 0;
