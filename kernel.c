@@ -45,6 +45,22 @@ void virtio_blk_init(void) {
     blk_req = (struct virtio_blk_req *) blk_req_paddr;
 }
 
+struct virtio_virtq *virtq_init(unsigned index) {
+    // Allocate a region for the virtqueue
+
+    paddr_t virtq_paddr = alloc_pages(align_up(sizeof(struct virtio_virtq), PAGE_SIZE) / PAGE_SIZE);
+    struct virtio_virtq *vq = (struct virtio_virtq *) virtq_paddr;
+    vq->queue_index = index;
+    vq->used_index = (volatile uint16_t *) &vq->used.index;
+    // Select the queue: Write the virtqueue index (first queue is 0).
+    virtio_reg_write32(VIRTIO_REG_QUEUE_SEL, index);
+    // Specify the queue size: Write the # of descriptors we will use.
+    virtio_reg_write32(VIRTIO_REG_QUEUE_NUM, VIRTQ_ENTRY_NUM);
+    // Write the physical page frame number (not physical address) of the queue.
+    virtio_reg_write32(VIRTIO_REG_QUEUE_PFN, virtq_paddr / PAGE_SIZE);
+    return vq;
+}
+
 struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long fid, long eid)
 {
     register long a0 __asm__("a0") = arg0;
