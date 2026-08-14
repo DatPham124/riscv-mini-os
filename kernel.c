@@ -45,6 +45,8 @@ void virtio_blk_init(void) {
     blk_req = (struct virtio_blk_req *) blk_req_paddr;
 }
 
+// Xin ram và khai báo phần cứng
+
 struct virtio_virtq *virtq_init(unsigned index) {
     // Allocate a region for the virtqueue
 
@@ -59,6 +61,14 @@ struct virtio_virtq *virtq_init(unsigned index) {
     // Write the physical page frame number (not physical address) of the queue.
     virtio_reg_write32(VIRTIO_REG_QUEUE_PFN, virtq_paddr / PAGE_SIZE);
     return vq;
+}
+
+void virtq_kick(struct virtio_virtq *vq, int desc_index) {
+    vq->avail.ring[vq->avail.index % VIRTQ_ENTRY_NUM] = desc_index;
+    vq->avail.index++;
+    __sync_synchronize();
+    virtio_reg_write32(VIRTIO_REG_QUEUE_NOTIFY, vq->queue_index);
+    vq->last_used_index++;
 }
 
 struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long fid, long eid)
@@ -464,7 +474,7 @@ uint64_t virtio_reg_read64(unsigned offset) {
     return *((volatile uint64_t *) (VIRTIO_BLK_PADDR + offset));
 }
 
-// Ch
+// ghi giá trị số 32 bit vào 1 thanh ghi được truyền vào
 
 void virtio_reg_write32(unsigned offset, uint32_t value) {
     *((volatile uint32_t *) (VIRTIO_BLK_PADDR + offset)) = value;
