@@ -75,6 +75,20 @@ bool virtq_is_busy(struct virtio_virtq *vq) {
     return vq->last_used_index != *vq->used_index
 }
 
+void read_write_disk(void *buf, unsigned sector, int is_write) {
+    if (sector >= blk_capacity / SECTOR_SIZE) {
+        printf("virtio: tried to read/write sector=%d, but capacity is %d\n", sector, blk_capacity / SECTOR_SIZE);
+        return;
+    }
+
+
+    // Xây dựng yêu cầu dựa trên đặc tả kỹ thuật của virtio-blk
+    blk_req->sector = sector;
+    blk_req->type = is_write ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN
+    if (is_write)
+        memcpy(blk_req->, buf, SECTOR_SIZE);
+}
+
 struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long fid, long eid)
 {
     register long a0 __asm__("a0") = arg0;
