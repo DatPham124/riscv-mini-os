@@ -87,6 +87,34 @@ void read_write_disk(void *buf, unsigned sector, int is_write) {
     blk_req->type = is_write ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN
     if (is_write)
         memcpy(blk_req->, buf, SECTOR_SIZE);
+
+    // Xây dựng virtqueue descriptor (sử dụng 3 descriptor)
+    struct virtio_virtq *vq = blk_request_vq;
+    vq->descs[0].addr = blk_req_paddr;
+    // 16 byte (type: 4, reserved: 4, sector: 8)
+    vq->descs[0].len = sizeof(uint32_t) * 2 + sizeof(uint64_t);
+    vq->descs[0].flags = VIRTQ_DESC_F_NEXT;
+    vq->descs[0].next = 1;
+
+    vq->descs[1].addr = blk_req_paddr + offsetof(struct virtio_blk_req, data);
+    vq->descs[1].len = SECTOR_SIZE;
+    vq->descs[1].flags = VIRTQ_DESC_F_NEXT | (is_write ? 0 : VIRTQ_DESC_F_WRITE);
+    vq->descs[1].next = 2;
+
+    vq->descs[2].addr = blk_req_paddr + offsetof(struct virtio_blk_req, status);
+    vq->descs[2].len = sizeof(uint8_t);
+    vq->descs[2].flags = VIRTQ_DESC_F_WRITE;
+
+    // Thông báo cho thiết bị là có request mới
+
+    virtq_kick(vd, 0);
+
+    // Đợi cho đến khi thiết bị hoàn thành xong quá trình
+
+    while (virtq_is_busy(vq))
+        ;
+    
+    
 }
 
 struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long fid, long eid)
