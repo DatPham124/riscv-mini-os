@@ -6,64 +6,82 @@ typedef unsigned int uint32_t;
 typedef uint32_t size_t;
 
 extern char __free_ram[], __free_ram_end[], __kernel_base[];
-
 extern char __bss[], __bss_end[], __stack_top[];
-
-extern char _binary_shell_bin_start[], _binary_shell_bin_size[];
+// extern char _binary_shell_bin_start[], _binary_shell_bin_size[];
 
 struct virtio_virtq *blk_request_vq;
 struct virtio_blk_req *blk_req;
 paddr_t blk_req_paddr;
 uint64_t blk_capacity;
 
-void virtio_blk_init(void) {
-    if (virtio_reg_read32(VIRTIO_REG_MAGIC) != 0x74726976)
-        PANIC("virtio: invalid magic value");
-    if (virtio_reg_read32(VIRTIO_REG_VERSION) != 1)
-        PANIC("virtio: invalid version")
-    if (virtio_reg_read32(VIRTIO_REG_DEVICE_ID) != VIRTIO_DEVICE_BLK)
-        PANIC("virtio: invalid device id")
-
-    // 1. Reset the device    
-    virtio_reg_write32(VIRTIO_REG_DEVICE_STATUS, 0)
-    // 2. Set the ACKNOWLEDGE status bit: We found the device
-    virtio_reg_fetch_and_or32(VIRTIO_REG_DEVICE_STATUS, VIRTIO_STATUS_ACK);
-    // 3. Set the DRIVER status bit: We know how to use the device
-    virtio_reg_fetch_and_or32(VIRTIO_REG_DEVICE_STATUS, VIRTIO_STATUS_DRIVER);
-    // Set our page size: We use 4KB pages. This defines PFN (page frame number) calculation.
-    virtio_reg_write32(VIRTIO_REG_PAGE_SIZE, PAGE_SIZE);
-    // Initialize a queue for disk read/write requests..
-    blk_request_vq = virtq_init(0);
-    // 6. Set the DRIVER_OK status bit: We can use now the device!
-    virtio_reg_write32(VIRTIO_REG_DEVICE_STATUS, VIRTIO_STATUS_DRIVER_OK);
-
-    // Get the disk capacity
-    blk_capacity = virtio_reg_read64(VIRTIO_REG_DEVICE_CONFIG + 0) * SECTOR_SIZE;
-    printf("virtio-blk: capacity is %d bytes\n", (int)blk_capacity);
-
-    blk_req_paddr = alloc_pages(align_up(sizeof(*blk_reg), PAGE_SIZE) / PAGE_SIZE);
-    blk_req = (struct virtio_blk_req *) blk_req_paddr;
+uint32_t virtio_reg_read32(unsigned offset)
+{
+    return *((volatile uint32_t *)(VIRTIO_BLK_PADDR + offset));
 }
 
-// Xin ram và khai báo phần cứng
+uint64_t virtio_reg_read64(unsigned offset)
+{
+    return *((volatile uint64_t *)(VIRTIO_BLK_PADDR + offset));
+}
 
-struct virtio_virtq *virtq_init(unsigned index) {
-    // Allocate a region for the virtqueue
+void virtio_reg_write32(unsigned offset, uint32_t value)
+{
+    *((volatile uint32_t *)(VIRTIO_BLK_PADDR + offset)) = value;
+}
 
+void virtio_reg_fetch_and_or32(unsigned offset, uint32_t value)
+{
+    virtio_reg_write32(offset, virtio_reg_read32(offset) | value);
+}
+
+// Khai báo trước hàm xin RAM virtqueue
+paddr_t alloc_pages(uint32_t n);
+
+struct virtio_virtq *virtq_init(unsigned index)
+{
     paddr_t virtq_paddr = alloc_pages(align_up(sizeof(struct virtio_virtq), PAGE_SIZE) / PAGE_SIZE);
-    struct virtio_virtq *vq = (struct virtio_virtq *) virtq_paddr;
+    struct virtio_virtq *vq = (struct virtio_virtq *)virtq_paddr;
     vq->queue_index = index;
-    vq->used_index = (volatile uint16_t *) &vq->used.index;
-    // Select the queue: Write the virtqueue index (first queue is 0).
+    vq->used_index = (volatile uint16_t *)&vq->used.index;
+
     virtio_reg_write32(VIRTIO_REG_QUEUE_SEL, index);
-    // Specify the queue size: Write the # of descriptors we will use.
     virtio_reg_write32(VIRTIO_REG_QUEUE_NUM, VIRTQ_ENTRY_NUM);
-    // Write the physical page frame number (not physical address) of the queue.
     virtio_reg_write32(VIRTIO_REG_QUEUE_PFN, virtq_paddr / PAGE_SIZE);
     return vq;
 }
 
-void virtq_kick(struct virtio_virtq *vq, int desc_index) {
+void virtio_blk_init(void)
+{
+    if (virtio_reg_read32(VIRTIO_REG_MAGIC) != 0x74726976)
+        PANIC("virtio: invalid magic value");
+    if (virtio_reg_read32(VIRTIO_REG_VERSION) != 1)
+        PANIC("virtio: invalid version");
+    if (virtio_reg_read32(VIRTIO_REG_DEVICE_ID) != VIRTIO_DEVICE_BLK)
+        PANIC("virtio: invalid device id");
+
+    // 1. Reset the device
+    virtio_reg_write32(VIRTIO_REG_DEVICE_STATUS, 0);
+    // 2. Set the ACKNOWLEDGE status bit
+    virtio_reg_fetch_and_or32(VIRTIO_REG_DEVICE_STATUS, VIRTIO_STATUS_ACK);
+    // 3. Set the DRIVER status bit
+    virtio_reg_fetch_and_or32(VIRTIO_REG_DEVICE_STATUS, VIRTIO_STATUS_DRIVER);
+    // Set page size
+    virtio_reg_write32(VIRTIO_REG_PAGE_SIZE, PAGE_SIZE);
+    // Initialize virtqueue 0
+    blk_request_vq = virtq_init(0);
+    // 6. Set DRIVER_OK
+    virtio_reg_write32(VIRTIO_REG_DEVICE_STATUS, VIRTIO_STATUS_DRIVER_OK);
+
+    // Get disk capacity
+    blk_capacity = virtio_reg_read64(VIRTIO_REG_DEVICE_CONFIG + 0) * SECTOR_SIZE;
+    printf("virtio-blk: capacity is %d bytes\n", (int)blk_capacity);
+
+    blk_req_paddr = alloc_pages(align_up(sizeof(*blk_req), PAGE_SIZE) / PAGE_SIZE);
+    blk_req = (struct virtio_blk_req *)blk_req_paddr;
+}
+
+void virtq_kick(struct virtio_virtq *vq, int desc_index)
+{
     vq->avail.ring[vq->avail.index % VIRTQ_ENTRY_NUM] = desc_index;
     vq->avail.index++;
     __sync_synchronize();
@@ -71,27 +89,26 @@ void virtq_kick(struct virtio_virtq *vq, int desc_index) {
     vq->last_used_index++;
 }
 
-bool virtq_is_busy(struct virtio_virtq *vq) {
-    return vq->last_used_index != *vq->used_index
+bool virtq_is_busy(struct virtio_virtq *vq)
+{
+    return vq->last_used_index != *vq->used_index;
 }
 
-void read_write_disk(void *buf, unsigned sector, int is_write) {
-    if (sector >= blk_capacity / SECTOR_SIZE) {
+void read_write_disk(void *buf, unsigned sector, int is_write)
+{
+    if (sector >= blk_capacity / SECTOR_SIZE)
+    {
         printf("virtio: tried to read/write sector=%d, but capacity is %d\n", sector, blk_capacity / SECTOR_SIZE);
         return;
     }
 
-
-    // Xây dựng yêu cầu dựa trên đặc tả kỹ thuật của virtio-blk
     blk_req->sector = sector;
-    blk_req->type = is_write ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN
+    blk_req->type = is_write ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN;
     if (is_write)
-        memcpy(blk_req->, buf, SECTOR_SIZE);
+        memcpy(blk_req->data, buf, SECTOR_SIZE);
 
-    // Xây dựng virtqueue descriptor (sử dụng 3 descriptor)
     struct virtio_virtq *vq = blk_request_vq;
     vq->descs[0].addr = blk_req_paddr;
-    // 16 byte (type: 4, reserved: 4, sector: 8)
     vq->descs[0].len = sizeof(uint32_t) * 2 + sizeof(uint64_t);
     vq->descs[0].flags = VIRTQ_DESC_F_NEXT;
     vq->descs[0].next = 1;
@@ -105,16 +122,20 @@ void read_write_disk(void *buf, unsigned sector, int is_write) {
     vq->descs[2].len = sizeof(uint8_t);
     vq->descs[2].flags = VIRTQ_DESC_F_WRITE;
 
-    // Thông báo cho thiết bị là có request mới
-
-    virtq_kick(vd, 0);
-
-    // Đợi cho đến khi thiết bị hoàn thành xong quá trình
+    virtq_kick(vq, 0);
 
     while (virtq_is_busy(vq))
         ;
-    
-    
+
+    if (blk_req->status != 0)
+    {
+        printf("virtio: warn: failed to read/write sector=%d status=%d\n",
+               sector, blk_req->status);
+        return;
+    }
+
+    if (!is_write)
+        memcpy(buf, blk_req->data, SECTOR_SIZE);
 }
 
 struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long fid, long eid)
@@ -144,7 +165,6 @@ void putchar(char sh)
 void kernel_entry(void)
 {
     __asm__ __volatile__(
-        // Retrieve the kernel stack of the running process from sscratch.
         "csrrw sp, sscratch, sp\n"
         "addi sp, sp, -4 * 31\n"
 
@@ -179,11 +199,9 @@ void kernel_entry(void)
         "sw s10, 4 * 28(sp)\n"
         "sw s11, 4 * 29(sp)\n"
 
-        // Retrieve and save the sp at the time of exception.
         "csrr a0, sscratch\n"
         "sw a0, 4 * 30(sp)\n"
 
-        // Reset the kernel stack.
         "addi a0, sp, 4 * 31\n"
         "csrw sscratch, a0\n"
 
@@ -224,7 +242,6 @@ void kernel_entry(void)
         "sret\n");
 }
 
-
 paddr_t alloc_pages(uint32_t n)
 {
     static paddr_t next_paddr = (paddr_t)__free_ram;
@@ -242,7 +259,6 @@ __attribute__((naked)) void switch_context(uint32_t *prev_sp,
                                            uint32_t *next_sp)
 {
     __asm__ __volatile__(
-
         "addi sp, sp, -13 * 4\n"
         "sw ra,  0  * 4(sp)\n"
         "sw s0,  1  * 4(sp)\n"
@@ -313,14 +329,11 @@ void yield(void)
     current_proc = next;
 
     __asm__ __volatile__(
-        // Bắt CPU xóa bộ nhớ đệm (TLB)
         "sfence.vma\n"
-        // Ghi gia trị vào thanh ghi quản lý phân trang
         "csrw satp, %[satp] \n"
         "sfence.vma\n"
         "csrw sscratch, %[sscratch]\n"
         :
-
         : [satp] "r"(SATP_SV32 | ((uint32_t)next->page_table / PAGE_SIZE)),
           [sscratch] "r"((uint32_t)&next->stack[sizeof(next->stack)]));
 
@@ -366,35 +379,15 @@ void map_page(uint32_t *table1, uint32_t vaddr, paddr_t paddr, uint32_t flags)
     if (!is_aligned(paddr, PAGE_SIZE))
         PANIC("unaligned paddr %x", paddr);
 
-    // Trích xuất 10 bit của vpn1 (Chỉ mục bảng phân trang caaos 1)
-    // Dịch phải 22 bit để vứt bỏ phần Offset(12) và vpn0(10)
-    // Dùng mask 0x3ff (10 bit 1) để cắt gọn gàng, bỏ phần bit dư thừa để lấy ra sạch sẽ phần vpn1
-
-    uint32_t vpn1 = (vaddr >> 22) & 0x3ff; //
+    uint32_t vpn1 = (vaddr >> 22) & 0x3ff;
 
     if ((table1[vpn1] & PAGE_V) == 0)
     {
-
-        /* Cấu trúc Virtual Address (Sv32):
-         * +-------------+-------------+--------------+
-         * | VPN1 (10b)  | VPN0 (10b)  | Offset (12b) |
-         * +-------------+-------------+--------------+
-         * 31          22 21         12 11            0
-         */
-
-        // create the 1st level page table if it doesn't exist
         uint32_t pt_paddr = alloc_pages(1);
-
-        // Phép chia để biết được địa chỉ của khối (VD: 4096 / 4096, 8192 / 4096)
-        // Dịch trái 10 bit đề dành cho các cờ
-
         table1[vpn1] = ((pt_paddr / PAGE_SIZE) << 10) | PAGE_V;
     }
 
     uint32_t vpn0 = (vaddr >> 12) & 0x3ff;
-
-    // Bỏ đi phần cờ 10 bit phía sau để tính toán địa chỉ câp kế tiếp cho bảng
-
     uint32_t *table0 = (uint32_t *)((table1[vpn1] >> 10) * PAGE_SIZE);
     table0[vpn0] = ((paddr / PAGE_SIZE) << 10) | flags | PAGE_V;
 }
@@ -432,18 +425,15 @@ struct process *create_process(const void *image, size_t image_size)
 
     uint32_t *page_table = (uint32_t *)alloc_pages(1);
 
-    // Map kernel pages
     for (paddr_t paddr = (paddr_t)__kernel_base;
          paddr < (paddr_t)__free_ram_end; paddr += PAGE_SIZE)
         map_page(page_table, paddr, paddr, PAGE_R | PAGE_W | PAGE_X);
-    
+
     map_page(page_table, VIRTIO_BLK_PADDR, VIRTIO_BLK_PADDR, PAGE_R | PAGE_W);
 
-    // Map user pages
     for (uint32_t off = 0; off < image_size; off += PAGE_SIZE)
     {
         paddr_t page = alloc_pages(1);
-
         size_t remaining = image_size - off;
         size_t copy_size = PAGE_SIZE <= remaining ? PAGE_SIZE : remaining;
 
@@ -456,7 +446,7 @@ struct process *create_process(const void *image, size_t image_size)
     proc->sp = (uint32_t)sp;
     proc->page_table = page_table;
     return proc;
-};
+}
 
 long getchar(void)
 {
@@ -492,6 +482,7 @@ void handle_syscall(struct trap_frame *f)
         PANIC("unexpected syscall a3=%x\n", f->a3);
     }
 }
+
 void handle_trap(struct trap_frame *f)
 {
     uint32_t scause = READ_CSR(scause);
@@ -509,26 +500,6 @@ void handle_trap(struct trap_frame *f)
 
     WRITE_CSR(sepc, user_pc);
 }
-// Các hàm sau dùng để thao tác với các thanh ghi phần cứng Virtio thông qua cơ chế MMIO (Memory - Mapped I/O)
-
-// ĐỌc 1 số 32 bit hoặc 64 bit từ một thanh ghi của thiết bị Virtio
-uint32_t virtio_reg_read32(unsigned offset) {
-    return *((volatile uint32_t *) (VIRTIO_BLK_PADDR + offset));
-}
-
-uint64_t virtio_reg_read64(unsigned offset) {
-    return *((volatile uint64_t *) (VIRTIO_BLK_PADDR + offset));
-}
-
-// ghi giá trị số 32 bit vào 1 thanh ghi được truyền vào
-
-void virtio_reg_write32(unsigned offset, uint32_t value) {
-    *((volatile uint32_t *) (VIRTIO_BLK_PADDR + offset)) = value;
-}
-
-void virtio_reg_fetch_and_or32(unsigned offset, uint32_t value) {
-    virtio_reg_write32(offset, virtio_reg_read32(offset) | value);
-}
 
 void kernel_main(void)
 {
@@ -540,24 +511,24 @@ void kernel_main(void)
 
     virtio_blk_init();
 
-    idle_proc = create_process(NULL, 0);
-    idle_proc->pid = 0;
-    current_proc = idle_proc;
+    char buf[SECTOR_SIZE];
+    read_write_disk(buf, 0, false);
+    printf("first sector: %s\n", buf);
 
-    create_process(_binary_shell_bin_start, (size_t)_binary_shell_bin_size);
+    strcpy(buf, "Hello from kernel!!!\n");
+    read_write_disk(buf, 0, true);
 
-    yield();
+    printf("Disk test passed successfully!\n");
 
-    PANIC("switched to idle process");
+    // Dừng Kernel an toàn sau khi hoàn thành bài test Disk
+    while (1)
+    {
+        __asm__ __volatile__("wfi"); // Wait for interrupt
+    }
 }
 
-__attribute__((naked))
-__attribute__((aligned(4)))
-
 __attribute__((section(".text.boot")))
-__attribute__((naked))
-
-void
+__attribute__((naked)) void
 boot(void)
 {
     __asm__ __volatile__(
