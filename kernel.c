@@ -11,6 +11,10 @@ extern char __bss[], __bss_end[], __stack_top[];
 
 struct virtio_virtq *blk_request_vq;
 struct virtio_blk_req *blk_req;
+
+struct file files[FILES_MAX];
+uint8_t disk[DISK_MAX_SIZE];
+
 paddr_t blk_req_paddr;
 uint64_t blk_capacity;
 
@@ -499,6 +503,17 @@ void handle_trap(struct trap_frame *f)
     }
 
     WRITE_CSR(sepc, user_pc);
+}
+
+int oct2int(char *oct, int len) {
+    int dec = 0;
+    for (int i = 0; i < len; i++) {
+        if (oct[i] < '0' || oct[i] > '7')
+            break;
+        
+            dec = dec * 8 + (oct[i] - '0');
+    }
+    return dec;
 }
 
 void kernel_main(void)
