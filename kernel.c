@@ -505,6 +505,7 @@ void handle_trap(struct trap_frame *f)
     WRITE_CSR(sepc, user_pc);
 }
 
+// Chuyển đổi một chuỗi ký tự biểu diễn số ở hệ Bát phân thành một số nguyên hệ thập phân
 int oct2int(char *oct, int len) {
     int dec = 0;
     for (int i = 0; i < len; i++) {
@@ -514,6 +515,11 @@ int oct2int(char *oct, int len) {
             dec = dec * 8 + (oct[i] - '0');
     }
     return dec;
+}
+
+void fs_init(void) {
+    for (unsigned sector = 0; sector < sizeof(disk) / SECTOR_SIZE; sector++)
+        read_write_disk(&disk[sector * SECTOR_SIZE], sector, false);
 }
 
 void kernel_main(void)
